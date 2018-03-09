@@ -1,0 +1,81 @@
+/* 
+  IR Breakbeam sensor demo!
+*/
+
+#define LEDPIN 13
+  // Pin 13: Arduino has an LED connected on pin 13
+  // Pin 11: Teensy 2.0 has the LED on pin 11
+  // Pin  6: Teensy++ 2.0 has the LED on pin 6
+  // Pin 13: Teensy 3.0 has the LED on pin 13
+
+#define SENSORPIN 4
+
+// variables will change:
+int sensorState = 0, lastState=0;         // variable for reading the pushbutton status
+
+
+
+/* Code to pulse pin 3 with a modulated signal
+* Can be used to drive an IR LED to keep a TSOP IR reciever happy
+* This allows you to use a modulated reciever and a continious beam detector
+* By Mike Cook Nov 2011 - Released under the Open Source licence
+*/
+volatile byte pulse = 0;
+
+ISR(TIMER2_COMPB_vect){  // Interrupt service routine to pulse the modulated pin 3
+    pulse++;
+  if(pulse >= 8) { // change number for number of modulation cycles in a pulse
+    pulse =0;
+    TCCR2A ^= _BV(COM2B1); // toggle pin 3 enable, turning the pin on and off
+  }
+}
+
+void setIrModOutput(){  // sets pin 3 going at the IR modulation rate
+  pinMode(3, OUTPUT);
+  TCCR2A = _BV(COM2B1) | _BV(WGM21) | _BV(WGM20); // Just enable output on Pin 3 and disable it on Pin 11
+  TCCR2B = _BV(WGM22) | _BV(CS22);
+  OCR2A = 51; // defines the frequency 51 = 38.4 KHz, 54 = 36.2 KHz, 58 = 34 KHz, 62 = 32 KHz
+  OCR2B = 26;  // deines the duty cycle - Half the OCR2A value for 50%
+  TCCR2B = TCCR2B & 0b00111000 | 0x2; // select a prescale value of 8:1 of the system clock
+}
+
+
+
+
+
+
+void setup() {
+  // initialize the LED pin as an output:
+  pinMode(LEDPIN, OUTPUT);      
+  // initialize the sensor pin as an input:
+  pinMode(SENSORPIN, INPUT);     
+  digitalWrite(SENSORPIN, HIGH); // turn on the pullup
+  setIrModOutput();
+  TIMSK2 = _BV(OCIE2B); // Output Compare Match B Interrupt Enable
+  
+  Serial.begin(9600);
+}
+
+void loop(){
+  // read the state of the pushbutton value:
+  sensorState = digitalRead(SENSORPIN);
+
+  // check if the sensor beam is broken
+  // if it is, the sensorState is LOW:
+  if (sensorState == LOW) {     
+    // turn LED on:
+    digitalWrite(LEDPIN, HIGH);  
+  } 
+  else {
+    // turn LED off:
+    digitalWrite(LEDPIN, LOW); 
+  }
+  
+  if (sensorState && !lastState) {
+    Serial.println("Unbroken");
+  } 
+  if (!sensorState && lastState) {
+    Serial.println("Broken");
+  }
+  lastState = sensorState;
+}
